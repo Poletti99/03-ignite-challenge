@@ -54,24 +54,38 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
       }
 
       const product = await api.get<Product>(`/products/${productId}`);
+
       setCart([...newCart, { ...product.data, amount: 1 }]);
-      localStorage.setItem('@RocketShoes:cart', JSON.stringify(newCart));
+      localStorage.setItem(
+        '@RocketShoes:cart',
+        JSON.stringify([...newCart, { ...product.data, amount: 1 }]),
+      );
     } catch (error) {
-      toast.error(error.message || 'Erro na adição do produto');
+      let message = error.message;
+      if (error?.response?.status === 404) {
+        message = 'Erro na adição do produto';
+      }
+
+      toast.error(message || 'Erro na adição do produto');
     }
   };
 
   const removeProduct = (productId: number) => {
     try {
       const newCart = [...cart];
-      newCart.splice(
-        newCart.findIndex(product => product.id === productId),
-        1,
+      const productIndex = newCart.findIndex(
+        product => product.id === productId,
       );
+
+      if (productIndex === -1) {
+        throw new Error('Erro na remoção do produto');
+      }
+
+      newCart.splice(productIndex, 1);
       setCart(newCart);
       localStorage.setItem('@RocketShoes:cart', JSON.stringify(newCart));
-    } catch {
-      toast.error('Erro na remoção do produto');
+    } catch (error) {
+      toast.error(error.message || 'Erro na remoção do produto');
     }
   };
 
@@ -80,9 +94,17 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     amount,
   }: UpdateProductAmount) => {
     try {
+      if (amount < 1) {
+        return;
+      }
+
       const newCart = [...cart];
-      const stock = await api.get<Stock>(`/stock/${productId}`);
       const productInCart = newCart.find(product => product.id === productId);
+      if (!productInCart) {
+        throw new Error('Erro na alteração de quantidade do produto');
+      }
+
+      const stock = await api.get<Stock>(`/stock/${productId}`);
 
       if (productInCart) {
         if (stock.data.amount < amount) {
